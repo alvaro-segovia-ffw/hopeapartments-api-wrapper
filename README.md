@@ -1,52 +1,52 @@
 # onoffice-test
 
-Script en Node.js para exportar apartamentos desde onOffice con toda su información y sus imágenes relacionadas en un único archivo JSON.
+Node.js script to export apartments from onOffice, including all property data and related images, into a single JSON file.
 
-## Requisitos
+## Requirements
 
-- Node.js 18+ (incluye `fetch` nativo)
-- Credenciales de onOffice (`TOKEN` y `SECRET`)
+- Node.js 18+ (includes native `fetch`)
+- onOffice credentials (`TOKEN` and `SECRET`)
 
-## Instalación
+## Installation
 
 ```bash
 npm install
 ```
 
-## Configuración
+## Configuration
 
-1. Copia el archivo de ejemplo:
+1. Copy the example file:
 
 ```bash
 cp .env.example .env
 ```
 
-2. Edita `.env` con tus credenciales:
+2. Edit `.env` with your credentials:
 
 ```env
 ONOFFICE_URL=https://api.onoffice.de/api/stable/api.php
-ONOFFICE_TOKEN=tu_token
-ONOFFICE_SECRET=tu_secret
+ONOFFICE_TOKEN=your_token
+ONOFFICE_SECRET=your_secret
 ```
 
-## Uso
+## Usage
 
 ```bash
 node export-apartments.js
 ```
 
-## Salida
+## Output
 
-El script genera un archivo con fecha y hora en el nombre:
+The script generates a file with a timestamp in its name:
 
 - `export_YYYY-MM-DD_HH-mm-ss.json`
 
-Cada apartamento incluye:
+Each apartment includes:
 
-- Datos generales (`id`, dirección, habitaciones, rentas, etc.)
-- `photos`: lista de imágenes relacionadas con metadatos (`url`, `type`, `title`, `originalname`, `modified`)
+- General data (`id`, address, rooms, rent, etc.)
+- `photos`: list of related images with metadata (`url`, `type`, `title`, `originalname`, `modified`)
 
-Ejemplo simplificado:
+Simplified example:
 
 ```json
 [
@@ -64,7 +64,7 @@ Ejemplo simplificado:
     "photos": [
       {
         "url": "https://...",
-        "type": "Foto",
+        "type": "Photo",
         "title": "Living room"
       }
     ]
@@ -72,6 +72,6 @@ Ejemplo simplificado:
 ]
 ```
 
-## Seguridad
+## Security
 
-- `.env` está ignorado en `.gitignore` para no subir credenciales.
+- `.env` is ignored in `.gitignore` to avoid committing credentials.

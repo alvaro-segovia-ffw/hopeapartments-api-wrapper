@@ -3,19 +3,19 @@
 /*
   Setup
   1) npm i node-fetch
-  2) Crea un .env o exporta variables en tu shell
+  2) Create a .env file or export variables in your shell
 
   Required env vars
-  - ONOFFICE_URL        Ejemplo: https://api.onoffice.de/api/stable/api.php
-  - ONOFFICE_TOKEN      Tu token
-  - ONOFFICE_SECRET     Tu secret
-  - ONOFFICE_RESOURCEID Opcional si tu integración lo usa
+  - ONOFFICE_URL        Example: https://api.onoffice.de/api/stable/api.php
+  - ONOFFICE_TOKEN      Your token
+  - ONOFFICE_SECRET     Your secret
+  - ONOFFICE_RESOURCEID Optional if your integration uses it
 
   Usage
-  node fetch-onoffice-apartments.js
+  node export-apartments.js
 
   Output
-  apartments_with_images.json
+  export_YYYY-MM-DD_HH-mm-ss.json in ./exports
 */
 
 const fs = require('fs/promises');
@@ -24,6 +24,7 @@ const crypto = require('crypto');
 const path = require('path');
 
 function loadDotEnv(filePath) {
+  // Minimal .env loader that preserves already exported shell variables.
   if (!fsSync.existsSync(filePath)) return;
   const content = fsSync.readFileSync(filePath, 'utf8');
   for (const rawLine of content.split('\n')) {
@@ -59,7 +60,7 @@ const LIST_OFFSET = 0;
 const PICS_BATCH_SIZE = 100;
 
 if (!API_URL || !TOKEN || !SECRET) {
-  console.error('Faltan ONOFFICE_TOKEN y ONOFFICE_SECRET en variables de entorno (.env)');
+  console.error('Missing ONOFFICE_TOKEN and ONOFFICE_SECRET in environment variables (.env)');
   process.exit(1);
 }
 
@@ -110,17 +111,20 @@ async function postSmart(actions) {
 }
 
 function chunk(arr, size) {
+  // Split an array into fixed-size batches for API requests.
   const out = [];
   for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
   return out;
 }
 
 function extractEstateRecords(result) {
+  // Normalize estate records shape from SMART API responses.
   const records = result?.data?.records;
   return Array.isArray(records) ? records : [];
 }
 
 function extractPicturesRecords(result) {
+  // Some accounts return pictures in slightly different response shapes.
   const r1 = result?.data?.records;
   const r2 = result?.data;
   const r3 = result?.records;
@@ -131,6 +135,7 @@ function extractPicturesRecords(result) {
 }
 
 function buildPicturesMap(picturesRecords) {
+  // Group pictures by estate id to efficiently attach them later.
   const map = new Map();
   for (const rec of picturesRecords) {
     const elements = Array.isArray(rec?.elements) ? rec.elements : [];
@@ -159,6 +164,7 @@ function toSqFtFromSqm(val) {
 }
 
 function parseBool(v) {
+  // Handle booleans from mixed API formats (bool, number, localized string).
   if (v === true || v === 1 || v === '1') return true;
   if (v === false || v === 0 || v === '0') return false;
 
@@ -179,6 +185,7 @@ function parseNumber(v) {
 }
 
 function normalizeElevator(v) {
+  // Keep elevator info as a list for API compatibility.
   if (Array.isArray(v)) return v;
   if (typeof v === 'string' && v.length) return [v];
   return [];
@@ -195,14 +202,14 @@ function mapEstateToExport(record) {
   const e = record?.elements || {};
   const id = String(e?.Id ?? record?.id ?? '');
 
-  // totals
+  // Derive numeric totals with null-safe parsing.
   const bedrooms = parseNumber(e?.anzahl_schlafzimmer);
   const bathrooms = parseNumber(e?.anzahl_badezimmer);
 
-  // rooms total: fallback ordenado
+  // Rooms total with ordered fallbacks:
   // 1) anzahl_zimmer
-  // 2) anzahl_raeume (a veces existe en algunas cuentas)
-  // 3) si no existe usar bedrooms como aproximación
+  // 2) anzahl_raeume (available in some accounts)
+  // 3) fallback to bedrooms as an approximation
   const roomsTotal =
     parseNumber(e?.anzahl_zimmer) ??
     parseNumber(e?.anzahl_raeume) ??
@@ -219,7 +226,7 @@ function mapEstateToExport(record) {
   const features = {
     elevator: normalizeElevator(e?.fahrstuhl),
     balcony: parseBool(e?.balkon) ?? false,
-    furnished: parseBool(e?.moebliert), // ahora boolean o null
+    furnished: parseBool(e?.moebliert), // boolean or null
   };
 
   const availability = {
@@ -263,6 +270,7 @@ function sortPhotos(a, b) {
 }
 
 async function fetchEstates() {
+  // Fetch apartments that are active, published, and residential.
   const ts = unixTs();
 
   const parameters = {
@@ -331,6 +339,7 @@ async function fetchEstates() {
 }
 
 async function fetchPicturesForEstateIds(estateIds) {
+  // Request estate pictures in batches to avoid oversized payloads.
   const allRecords = [];
 
   for (const batch of chunk(estateIds, PICS_BATCH_SIZE)) {
@@ -376,9 +385,11 @@ async function fetchPicturesForEstateIds(estateIds) {
 }
 
 async function main() {
+  // 1) Fetch + map apartment data.
   const estateRecords = await fetchEstates();
   const exports = estateRecords.map(mapEstateToExport);
 
+  // 2) Fetch and attach related pictures by estate id.
   const estateIds = exports.map((x) => x.id).filter(Boolean);
   const picturesRecords = await fetchPicturesForEstateIds(estateIds);
   const picsMap = buildPicturesMap(picturesRecords);
@@ -386,17 +397,18 @@ async function main() {
   for (const item of exports) {
     const pics = picsMap.get(String(item.id)) || [];
     pics.sort(sortPhotos);
-    // single export: cada apartamento incluye todas sus imagenes con metadatos
+    // Single export: each apartment includes all related picture metadata.
     item.photos = pics;
   }
 
+  // 3) Persist timestamped export file.
   const outputDir = path.join(process.cwd(), 'exports');
   await fs.mkdir(outputDir, { recursive: true });
 
   const outputFileName = buildExportFileName('export');
   const outputFilePath = path.join(outputDir, outputFileName);
   await fs.writeFile(outputFilePath, JSON.stringify(exports, null, 2), 'utf8');
-  console.log(`OK: ${outputFilePath} generado con apartamentos e imagenes. Apartments: ${exports.length}`);
+  console.log(`OK: ${outputFilePath} generated with apartments and images. Apartments: ${exports.length}`);
 }
 
 main().catch((err) => {
