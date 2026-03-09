@@ -105,7 +105,7 @@ npm run api
 
 ## Environment Variables
 
-See [.env.example](/Users/alvaro/workspace/onoffice-dataexport-script/.env.example).
+See [.env.example](.env.example).
 
 Core variables:
 
@@ -228,7 +228,7 @@ Web UI for manual testing:
 2. Enter partner token and secret.
 3. Click `Fetch Apartments JSON`.
 
-More details in [playground/README.md](/Users/alvaro/workspace/onoffice-dataexport-script/playground/README.md).
+More details in [playground/README.md](playground/README.md).
 
 Note: in `NODE_ENV=production`, playground is disabled by default unless `EXPORT_API_ENABLE_PLAYGROUND=true`.
 
@@ -244,7 +244,7 @@ Note: in `NODE_ENV=production`, playground is disabled by default unless `EXPORT
 
 Production deployment guide:
 
-- [docs/DEPLOYMENT.md](/Users/alvaro/workspace/onoffice-dataexport-script/docs/DEPLOYMENT.md)
+- [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
 
 ## Troubleshooting
 
@@ -261,6 +261,6 @@ Production deployment guide:
 
 ## Additional Docs
 
-- [docs/API_REFERENCE.md](/Users/alvaro/workspace/onoffice-dataexport-script/docs/API_REFERENCE.md)
-- [docs/PARTNER_INTEGRATION.md](/Users/alvaro/workspace/onoffice-dataexport-script/docs/PARTNER_INTEGRATION.md)
-- [docs/SECURITY.md](/Users/alvaro/workspace/onoffice-dataexport-script/docs/SECURITY.md)
+- [docs/API_REFERENCE.md](docs/API_REFERENCE.md)
+- [docs/PARTNER_INTEGRATION.md](docs/PARTNER_INTEGRATION.md)
+- [docs/SECURITY.md](docs/SECURITY.md)
