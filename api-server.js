@@ -8,7 +8,7 @@ const { fetchApartmentsLive } = require('./lib/apartment-export');
 
 loadDotEnv(path.join(process.cwd(), '.env'));
 
-const PORT = Number(process.env.EXPORT_API_PORT || 3000);
+const PORT = Number(process.env.PORT || process.env.EXPORT_API_PORT || 3000);
 const MAX_TIME_SKEW_SEC = Number(process.env.EXPORT_API_TIME_SKEW_SEC || 300);
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 

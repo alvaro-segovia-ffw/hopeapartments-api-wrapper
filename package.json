@@ -4,6 +4,7 @@
   "description": "Hope Apartments API for live onOffice apartment exports",
   "main": "export-apartments.js",
   "scripts": {
+    "start": "node api-server.js",
     "export": "node export-apartments.js",
     "api": "node api-server.js",
     "test": "node --test"

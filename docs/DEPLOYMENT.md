@@ -2,124 +2,62 @@
 
 ## Target
 
-Deploy API behind HTTPS on your own domain (for example `api.hope-apartments.de`).
+Deploy the API on Railway behind Railway's managed HTTPS endpoint or a custom domain.
 
-## Recommended Stack
+## Prerequisites
 
-- Ubuntu server
-- Node.js 18+
-- Nginx reverse proxy
-- systemd service
-- Let's Encrypt TLS
+- A Railway account
+- This repository connected to a Railway project
+- Valid onOffice credentials
+- At least one partner user configured
 
-## 1) Server Setup
+## Required Environment Variables
+
+Set these in Railway's service variables:
+
+```env
+NODE_ENV=production
+ONOFFICE_TOKEN=your_onoffice_token
+ONOFFICE_SECRET=your_onoffice_secret
+EXPORT_API_USERS=[{"id":"partner-a","token":"partner_token","secret":"partner_secret"}]
+```
+
+Optional variables:
+
+```env
+ONOFFICE_URL=https://api.onoffice.de/api/stable/api.php
+EXPORT_API_TIME_SKEW_SEC=300
+EXPORT_API_ENABLE_PLAYGROUND=false
+EXPORT_API_RATE_LIMIT_ENABLED=true
+EXPORT_API_RATE_LIMIT_WINDOW_SEC=60
+EXPORT_API_RATE_LIMIT_MAX_REQUESTS=60
+```
+
+Notes:
+
+- Do not upload your local `.env` to Railway.
+- `PORT` is injected by Railway automatically and is used by the app.
+
+## Deploy Steps
+
+1. Create a new Railway project.
+2. Connect this repository.
+3. Add the required environment variables.
+4. Deploy the service.
+
+Railway will install dependencies and run:
 
 ```bash
-sudo apt update
-sudo apt install -y nginx certbot python3-certbot-nginx
+npm start
 ```
 
-Install Node.js 18+ using your preferred method (NodeSource, nvm, etc.).
+## Post-Deploy Checks
 
-## 2) Deploy App
+- `GET /health` returns `200`
+- `GET /docs` loads Swagger UI
+- Signed `GET /apartments` succeeds with a configured partner token/secret
+- `/playground` is disabled in production unless you explicitly enable it
 
-```bash
-git clone <your-repo-url>
-cd onoffice-dataexport-script
-npm install --omit=dev
-cp .env.example .env
-```
+## Custom Domain
 
-Fill production `.env` values.
-
-## 3) Create systemd Service
-
-Create `/etc/systemd/system/hope-apartments-api.service`:
-
-```ini
-[Unit]
-Description=Hope Apartments API
-After=network.target
-
-[Service]
-Type=simple
-User=www-data
-WorkingDirectory=/opt/onoffice-dataexport-script
-ExecStart=/usr/bin/node /opt/onoffice-dataexport-script/api-server.js
-Restart=always
-RestartSec=5
-Environment=NODE_ENV=production
-
-[Install]
-WantedBy=multi-user.target
-```
-
-Then:
-
-```bash
-sudo systemctl daemon-reload
-sudo systemctl enable hope-apartments-api
-sudo systemctl start hope-apartments-api
-sudo systemctl status hope-apartments-api
-```
-
-## 4) Nginx Reverse Proxy
-
-Create `/etc/nginx/sites-available/hope-apartments-api`:
-
-```nginx
-server {
-    listen 80;
-    server_name api.hope-apartments.de;
-
-    location / {
-        proxy_pass http://127.0.0.1:3000;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-}
-```
-
-Enable:
-
-```bash
-sudo ln -s /etc/nginx/sites-available/hope-apartments-api /etc/nginx/sites-enabled/
-sudo nginx -t
-sudo systemctl reload nginx
-```
-
-## 5) TLS Certificate
-
-```bash
-sudo certbot --nginx -d api.hope-apartments.de
-```
-
-## 6) Firewall
-
-```bash
-sudo ufw allow OpenSSH
-sudo ufw allow 'Nginx Full'
-sudo ufw enable
-```
-
-## 7) Post-Deploy Checks
-
-- `GET /playground` loads in browser.
-- Signed `GET /apartments` succeeds with partner credentials.
-- Service restarts automatically after reboot.
-- Logs are healthy:
-
-```bash
-sudo journalctl -u hope-apartments-api -f
-```
-
-## 8) Update Procedure
-
-```bash
-git pull
-npm install --omit=dev
-sudo systemctl restart hope-apartments-api
-```
+If you want a branded URL such as `api.example.com`, add it in Railway's domain settings and update partner integrations to use that base URL.

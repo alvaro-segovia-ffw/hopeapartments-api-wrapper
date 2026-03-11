@@ -252,7 +252,7 @@ Note: in `NODE_ENV=production`, playground is disabled by default unless `EXPORT
 
 ## Deployment
 
-Production deployment guide:
+Railway deployment guide:
 
 - [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
 
@@ -271,6 +271,4 @@ Production deployment guide:
 
 ## Additional Docs
 
-- [docs/API_REFERENCE.md](docs/API_REFERENCE.md)
-- [docs/PARTNER_INTEGRATION.md](docs/PARTNER_INTEGRATION.md)
 - [docs/SECURITY.md](docs/SECURITY.md)
