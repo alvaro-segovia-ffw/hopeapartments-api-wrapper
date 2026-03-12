@@ -204,7 +204,8 @@ curl -X GET "http://localhost:3000/auth/me" \
 - `GET /docs`: interactive Swagger UI
 
 Swagger documents the current header contract for direct authentication with token + secret.
-In production, docs are disabled by default. If you enable them, protect them with Basic Auth.
+In production, docs are disabled by default. If you enable them, access should be restricted to authenticated users with roles `admin`, `developer`, or `client`.
+During the current transition, docs also accept the dedicated Basic Auth fallback if configured.
 
 Example:
 
@@ -214,6 +215,11 @@ DOCS_BASIC_AUTH_ENABLED=true
 DOCS_BASIC_AUTH_USER=docs_admin
 DOCS_BASIC_AUTH_PASSWORD=replace_with_a_long_random_secret
 ```
+
+Docs access options:
+
+- Preferred: `Authorization: Bearer <access-token>` from `POST /auth/login`
+- Transitional fallback: Basic Auth with `DOCS_BASIC_AUTH_USER` / `DOCS_BASIC_AUTH_PASSWORD`
 
 ### Required Headers
 
