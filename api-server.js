@@ -210,8 +210,10 @@ app.get('/apartments', rateLimitMiddleware, authMiddleware, async (req, res) => 
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`Hope Apartments API listening on http://localhost:${PORT}`);
+let isShuttingDown = false;
+
+const server = app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Hope Apartments API listening on port ${PORT}`);
   console.log(
     `Playground ${ENABLE_PLAYGROUND ? 'enabled' : 'disabled'} (NODE_ENV=${process.env.NODE_ENV || 'development'})`
   );
@@ -221,3 +223,20 @@ app.listen(PORT, () => {
     }`
   );
 });
+
+function shutdown(signal) {
+  if (isShuttingDown) return;
+  isShuttingDown = true;
+
+  console.log(`${signal} received, shutting down gracefully...`);
+  server.close((err) => {
+    if (err) {
+      console.error('Error while closing HTTP server', err);
+      process.exit(1);
+    }
+    process.exit(0);
+  });
+}
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
