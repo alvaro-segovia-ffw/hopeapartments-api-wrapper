@@ -123,9 +123,6 @@ Core variables:
 - `EXPORT_API_PORT`: API port (example: `3000`)
 - `EXPORT_API_ENABLE_PLAYGROUND`: optional (`true/false`), default `true` in non-production and `false` in production
 - `DOCS_ENABLED`: optional (`true/false`), default `true` in non-production and `false` in production
-- `DOCS_BASIC_AUTH_ENABLED`: optional (`true/false`), default follows `DOCS_ENABLED`
-- `DOCS_BASIC_AUTH_USER`: required when docs Basic Auth is enabled
-- `DOCS_BASIC_AUTH_PASSWORD`: required when docs Basic Auth is enabled
 - `EXPORT_API_RATE_LIMIT_ENABLED`: optional (`true/false`), enables in-memory rate limiting on `GET /apartments`
 - `EXPORT_API_RATE_LIMIT_WINDOW_SEC`: optional positive integer window in seconds (default `60`)
 - `EXPORT_API_RATE_LIMIT_MAX_REQUESTS`: optional positive integer max requests per window (default `60`)
@@ -204,22 +201,18 @@ curl -X GET "http://localhost:3000/auth/me" \
 - `GET /docs`: interactive Swagger UI
 
 Swagger documents the current header contract for direct authentication with token + secret.
-In production, docs are disabled by default. If you enable them, access should be restricted to authenticated users with roles `admin`, `developer`, or `client`.
-During the current transition, docs also accept the dedicated Basic Auth fallback if configured.
+In production, docs are disabled by default. If you enable them, access is restricted to authenticated users with roles `admin`, `developer`, or `client`.
 
 Example:
 
 ```env
 DOCS_ENABLED=true
-DOCS_BASIC_AUTH_ENABLED=true
-DOCS_BASIC_AUTH_USER=docs_admin
-DOCS_BASIC_AUTH_PASSWORD=replace_with_a_long_random_secret
 ```
 
-Docs access options:
+Docs access:
 
-- Preferred: `Authorization: Bearer <access-token>` from `POST /auth/login`
-- Transitional fallback: Basic Auth with `DOCS_BASIC_AUTH_USER` / `DOCS_BASIC_AUTH_PASSWORD`
+- `Authorization: Bearer <access-token>` from `POST /auth/login`
+- Allowed roles: `admin`, `developer`, `client`
 
 ### Required Headers
 

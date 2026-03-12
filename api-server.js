@@ -6,7 +6,7 @@ const { loginWithPassword, getUserProfile, isAuthConfigured } = require('./lib/a
 const { loadDotEnv } = require('./lib/load-dotenv');
 const { fetchApartmentsLive } = require('./lib/apartment-export');
 const { safeCompare } = require('./lib/safe-compare');
-const { docsAvailabilityMiddleware, docsJwtOrBasicAuthMiddleware } = require('./middlewares/docs-access');
+const { docsAvailabilityMiddleware, requireDocsAccess } = require('./middlewares/docs-access');
 const { requireConfiguredAuth } = require('./middlewares/require-configured-auth');
 const { requireAuth } = require('./middlewares/require-auth');
 
@@ -33,7 +33,6 @@ function parseEnvPositiveInt(raw, fallback) {
 
 const ENABLE_PLAYGROUND = parseEnvBool(process.env.EXPORT_API_ENABLE_PLAYGROUND, !IS_PRODUCTION);
 const DOCS_ENABLED = parseEnvBool(process.env.DOCS_ENABLED, !IS_PRODUCTION);
-const DOCS_BASIC_AUTH_ENABLED = parseEnvBool(process.env.DOCS_BASIC_AUTH_ENABLED, DOCS_ENABLED);
 const RATE_LIMIT_ENABLED = parseEnvBool(process.env.EXPORT_API_RATE_LIMIT_ENABLED, true);
 const RATE_LIMIT_WINDOW_SEC = parseEnvPositiveInt(process.env.EXPORT_API_RATE_LIMIT_WINDOW_SEC, 60);
 const RATE_LIMIT_MAX_REQUESTS = parseEnvPositiveInt(
@@ -41,8 +40,6 @@ const RATE_LIMIT_MAX_REQUESTS = parseEnvPositiveInt(
   60
 );
 const rateLimitState = new Map();
-const DOCS_BASIC_AUTH_USER = String(process.env.DOCS_BASIC_AUTH_USER || '').trim();
-const DOCS_BASIC_AUTH_PASSWORD = String(process.env.DOCS_BASIC_AUTH_PASSWORD || '');
 const AUTH_ENABLED = isAuthConfigured();
 
 function parseUsers(raw) {
@@ -80,14 +77,6 @@ function parseUsers(raw) {
 }
 
 const usersByToken = parseUsers(process.env.EXPORT_API_USERS);
-
-if (DOCS_ENABLED && DOCS_BASIC_AUTH_ENABLED) {
-  if (!DOCS_BASIC_AUTH_USER || !DOCS_BASIC_AUTH_PASSWORD) {
-    throw new Error(
-      'Missing DOCS_BASIC_AUTH_USER / DOCS_BASIC_AUTH_PASSWORD while docs protection is enabled.'
-    );
-  }
-}
 
 function authMiddleware(req, res, next) {
   const token = String(req.header('x-api-token') || '').trim();
@@ -159,11 +148,6 @@ const playgroundDir = path.join(process.cwd(), 'playground', 'web');
 const docsDir = path.join(process.cwd(), 'docs');
 const swaggerUiPath = path.join(docsDir, 'swagger', 'index.html');
 const openApiSpecPath = path.join(docsDir, 'openapi.json');
-const requireDocsAccess = docsJwtOrBasicAuthMiddleware({
-  basicAuthEnabled: DOCS_BASIC_AUTH_ENABLED,
-  basicAuthUser: DOCS_BASIC_AUTH_USER,
-  basicAuthPassword: DOCS_BASIC_AUTH_PASSWORD,
-});
 const requireDocsAvailability = docsAvailabilityMiddleware(DOCS_ENABLED);
 
 app.use(express.json());
@@ -175,12 +159,12 @@ if (ENABLE_PLAYGROUND) {
   });
 }
 
-app.get('/openapi.json', requireDocsAvailability, requireDocsAccess, (_req, res) => {
+app.get('/openapi.json', requireDocsAvailability, requireConfiguredAuth, requireDocsAccess, (_req, res) => {
   res.type('application/json');
   return res.sendFile(openApiSpecPath);
 });
 
-app.get('/docs', requireDocsAvailability, requireDocsAccess, (_req, res) => {
+app.get('/docs', requireDocsAvailability, requireConfiguredAuth, requireDocsAccess, (_req, res) => {
   return res.sendFile(swaggerUiPath);
 });
 
@@ -289,7 +273,7 @@ const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(
     `Playground ${ENABLE_PLAYGROUND ? 'enabled' : 'disabled'} (NODE_ENV=${process.env.NODE_ENV || 'development'})`
   );
-  console.log(`Docs ${DOCS_ENABLED ? 'enabled' : 'disabled'}${DOCS_ENABLED && DOCS_BASIC_AUTH_ENABLED ? ' (Basic Auth protected)' : ''}`);
+  console.log(`Docs ${DOCS_ENABLED ? 'enabled' : 'disabled'}${DOCS_ENABLED ? ' (JWT + roles protected)' : ''}`);
   console.log(`App auth ${AUTH_ENABLED ? 'enabled' : 'disabled'}${AUTH_ENABLED ? ' (database + JWT)' : ''}`);
   console.log(
     `Rate limiting ${
