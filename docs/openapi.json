@@ -3,7 +3,7 @@
   "info": {
     "title": "Hope Apartments API",
     "version": "1.0.0",
-    "description": "Swagger documentation for the Hope Apartments API. The protected apartments endpoint uses x-api-token and x-api-secret headers."
+    "description": "Swagger documentation for the Hope Apartments API. Apartments support legacy partner auth and the newer X-API-Key flow. Docs are protected with Bearer JWT auth."
   },
   "servers": [
     {
@@ -19,6 +19,14 @@
     {
       "name": "Apartments",
       "description": "Apartment export endpoints"
+    },
+    {
+      "name": "Auth",
+      "description": "JWT authentication endpoints"
+    },
+    {
+      "name": "API Keys",
+      "description": "Internal API key management for partner integrations"
     }
   ],
   "paths": {
@@ -59,6 +67,7 @@
       "get": {
         "tags": ["System"],
         "summary": "OpenAPI specification",
+        "security": [{ "bearerAuth": [] }],
         "responses": {
           "200": {
             "description": "OpenAPI document",
@@ -77,6 +86,7 @@
       "get": {
         "tags": ["System"],
         "summary": "Swagger UI",
+        "security": [{ "bearerAuth": [] }],
         "responses": {
           "200": {
             "description": "Interactive API documentation",
@@ -91,11 +101,51 @@
         }
       }
     },
+    "/auth/login": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Login with email and password",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "email": { "type": "string", "format": "email" },
+                  "password": { "type": "string" }
+                },
+                "required": ["email", "password"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful login"
+          },
+          "401": {
+            "description": "Invalid credentials"
+          }
+        }
+      }
+    },
+    "/auth/me": {
+      "get": {
+        "tags": ["Auth"],
+        "summary": "Current authenticated user",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Current user" },
+          "401": { "description": "Unauthorized" }
+        }
+      }
+    },
     "/apartments": {
       "get": {
         "tags": ["Apartments"],
         "summary": "Fetch live apartment data",
-        "description": "Returns normalized apartments from onOffice. This endpoint requires a valid partner token and secret.",
+        "description": "Returns normalized apartments from onOffice. This endpoint accepts either the legacy partner token/secret pair or a valid X-API-Key.",
         "parameters": [
           {
             "name": "x-api-token",
@@ -109,11 +159,20 @@
           {
             "name": "x-api-secret",
             "in": "header",
-            "required": true,
+            "required": false,
             "schema": {
               "type": "string"
             },
             "description": "Partner secret"
+          },
+          {
+            "name": "X-API-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Partner API key"
           }
         ],
         "responses": {
@@ -212,9 +271,112 @@
           }
         }
       }
+    },
+    "/api-keys": {
+      "get": {
+        "tags": ["API Keys"],
+        "summary": "List API keys",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "API key list" },
+          "401": { "description": "Unauthorized" },
+          "403": { "description": "Forbidden" }
+        }
+      },
+      "post": {
+        "tags": ["API Keys"],
+        "summary": "Create API key",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "201": { "description": "API key created" },
+          "401": { "description": "Unauthorized" },
+          "403": { "description": "Forbidden" }
+        }
+      }
+    },
+    "/api-keys/{id}": {
+      "get": {
+        "tags": ["API Keys"],
+        "summary": "Read API key by id",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "API key details" },
+          "404": { "description": "Not found" }
+        }
+      },
+      "patch": {
+        "tags": ["API Keys"],
+        "summary": "Update API key",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "API key updated" },
+          "404": { "description": "Not found" }
+        }
+      }
+    },
+    "/api-keys/{id}/revoke": {
+      "post": {
+        "tags": ["API Keys"],
+        "summary": "Revoke API key",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "API key revoked" },
+          "404": { "description": "Not found" }
+        }
+      }
+    },
+    "/api-keys/{id}/reactivate": {
+      "post": {
+        "tags": ["API Keys"],
+        "summary": "Reactivate API key",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "API key reactivated" },
+          "404": { "description": "Not found" }
+        }
+      }
     }
   },
   "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    },
     "schemas": {
       "Apartment": {
         "type": "object",

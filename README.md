@@ -40,6 +40,7 @@ Each request performs a live sync from onOffice and returns transformed apartmen
 - Consistent transformed JSON output.
 - Per-user authentication with token + secret.
 - Optional database-backed auth for real users (`/auth/login`, `/auth/me`).
+- API key authentication for partner integrations in parallel to legacy partner auth.
 - Concurrency protection (single live sync at a time).
 - Web playground to test token/secret and inspect responses.
 - Optional CLI export script that writes JSON files to `exports/`.
@@ -157,6 +158,12 @@ Generates timestamped JSON files under `exports/`.
 - `POST /auth/login` (optional, database-backed auth)
 - `GET /auth/me` (optional, requires Bearer token)
 - `GET /apartments` (protected)
+- `GET /api-keys` (admin/developer)
+- `POST /api-keys` (admin/developer)
+- `GET /api-keys/:id` (admin/developer)
+- `PATCH /api-keys/:id` (admin/developer)
+- `POST /api-keys/:id/revoke` (admin/developer)
+- `POST /api-keys/:id/reactivate` (admin/developer)
 - `GET /health` (unprotected health check)
 - `GET /openapi.json` (OpenAPI spec)
 - `GET /docs` (Swagger UI)
@@ -176,7 +183,7 @@ Generates timestamped JSON files under `exports/`.
 ### Auth Endpoints
 
 The current API keeps backward compatibility with `x-api-token` + `x-api-secret` for `GET /apartments`.
-In parallel, you can enable real user auth backed by PostgreSQL.
+In parallel, you can enable real user auth backed by PostgreSQL and partner auth via `X-API-Key`.
 
 #### Login
 
@@ -194,6 +201,39 @@ ACCESS_TOKEN="replace_with_bearer_token"
 curl -X GET "http://localhost:3000/auth/me" \
   -H "Authorization: Bearer ${ACCESS_TOKEN}"
 ```
+
+### API Key Endpoints
+
+Partner integrations can now use `X-API-Key` for `GET /apartments` without replacing the legacy flow yet.
+
+Create key:
+
+```bash
+ACCESS_TOKEN="replace_with_admin_or_developer_token"
+
+curl -X POST "http://localhost:3000/api-keys" \
+  -H "Authorization: Bearer ${ACCESS_TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "partnerId":"partner-idealista",
+    "name":"Idealista Production",
+    "environment":"live",
+    "role":"client",
+    "scopes":["apartments:read"],
+    "notes":"Primary production integration"
+  }'
+```
+
+Use key on apartments:
+
+```bash
+API_KEY="hop_live_xxxxxxxxxxxx_yyyyyyyyyyyyyyyy"
+
+curl -X GET "http://localhost:3000/apartments" \
+  -H "X-API-Key: ${API_KEY}"
+```
+
+List / read / update / revoke / reactivate API keys require a JWT from a user with role `admin` or `developer`.
 
 ## Swagger
 
@@ -218,6 +258,7 @@ Docs access:
 
 - `x-api-token`
 - `x-api-secret`
+- `X-API-Key`
 
 ### Curl Example
 
@@ -231,6 +272,15 @@ curl -X GET "http://localhost:3000${PATH}" \
   -H "x-api-secret: ${SECRET}"
 ```
 
+Alternative with API key:
+
+```bash
+API_KEY="hop_live_xxxxxxxxxxxx_yyyyyyyyyyyyyyyy"
+
+curl -X GET "http://localhost:3000/apartments" \
+  -H "X-API-Key: ${API_KEY}"
+```
+
 ### Successful Response
 
 ```json
@@ -238,6 +288,7 @@ curl -X GET "http://localhost:3000${PATH}" \
   "apartments": [],
   "meta": {
     "requestedBy": "partner-a",
+    "authType": "legacy",
     "count": 84,
     "startedAt": "2026-03-06T10:00:00.000Z",
     "finishedAt": "2026-03-06T10:00:03.000Z",
@@ -252,6 +303,13 @@ curl -X GET "http://localhost:3000${PATH}" \
 - `409 Conflict`: another live sync is already running.
 - `429 TooManyRequests`: rate limit exceeded, retry after window reset.
 - `500 LiveFetchFailed`: onOffice call or mapping failed.
+
+Migration path:
+
+1. Existing partners keep using `x-api-token` + `x-api-secret`.
+2. New partners should receive `X-API-Key`.
+3. Existing partners can be migrated one by one to API keys.
+4. `EXPORT_API_USERS` can be removed only after all partners are migrated.
 
 ## Playground
 

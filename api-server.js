@@ -3,12 +3,24 @@
 const express = require('express');
 const path = require('path');
 const { loginWithPassword, getUserProfile, isAuthConfigured } = require('./lib/auth-service');
+const {
+  createApiKey,
+  findApiKeyById,
+  isApiKeyServiceConfigured,
+  listApiKeys,
+  reactivateApiKey,
+  revokeApiKey,
+  updateApiKey,
+} = require('./lib/api-key-service');
+const { writeAuditLog } = require('./lib/audit-service');
 const { loadDotEnv } = require('./lib/load-dotenv');
 const { fetchApartmentsLive } = require('./lib/apartment-export');
 const { safeCompare } = require('./lib/safe-compare');
 const { docsAvailabilityMiddleware, requireDocsAccess } = require('./middlewares/docs-access');
 const { requireConfiguredAuth } = require('./middlewares/require-configured-auth');
 const { requireAuth } = require('./middlewares/require-auth');
+const { requireLegacyOrApiKeyAuth } = require('./middlewares/require-legacy-or-api-key-auth');
+const { requireRole } = require('./middlewares/require-role');
 
 loadDotEnv(path.join(process.cwd(), '.env'));
 
@@ -149,6 +161,8 @@ const docsDir = path.join(process.cwd(), 'docs');
 const swaggerUiPath = path.join(docsDir, 'swagger', 'index.html');
 const openApiSpecPath = path.join(docsDir, 'openapi.json');
 const requireDocsAvailability = docsAvailabilityMiddleware(DOCS_ENABLED);
+const requirePartnerAccess = requireLegacyOrApiKeyAuth(authMiddleware);
+const requireApiKeyAdmin = [requireConfiguredAuth, requireAuth, requireRole('admin', 'developer')];
 
 app.use(express.json());
 
@@ -230,7 +244,232 @@ app.get('/auth/me', requireConfiguredAuth, requireAuth, async (req, res) => {
   }
 });
 
-app.get('/apartments', rateLimitMiddleware, authMiddleware, async (req, res) => {
+app.get('/api-keys', ...requireApiKeyAdmin, async (req, res) => {
+  if (!isApiKeyServiceConfigured()) {
+    return res.status(503).json({
+      error: 'ApiKeyServiceNotConfigured',
+      message: 'API key service requires DATABASE_URL.',
+    });
+  }
+
+  try {
+    const apiKeys = await listApiKeys();
+    return res.json({ apiKeys });
+  } catch (err) {
+    return res.status(500).json({
+      error: 'ApiKeysListFailed',
+      message: err.message || 'Unknown error',
+    });
+  }
+});
+
+app.get('/api-keys/:id', ...requireApiKeyAdmin, async (req, res) => {
+  if (!isApiKeyServiceConfigured()) {
+    return res.status(503).json({
+      error: 'ApiKeyServiceNotConfigured',
+      message: 'API key service requires DATABASE_URL.',
+    });
+  }
+
+  try {
+    const apiKey = await findApiKeyById(req.params.id);
+    if (!apiKey) {
+      return res.status(404).json({
+        error: 'NotFound',
+        message: 'API key not found.',
+      });
+    }
+    return res.json({ apiKey });
+  } catch (err) {
+    return res.status(500).json({
+      error: 'ApiKeyReadFailed',
+      message: err.message || 'Unknown error',
+    });
+  }
+});
+
+app.post('/api-keys', ...requireApiKeyAdmin, async (req, res) => {
+  if (!isApiKeyServiceConfigured()) {
+    return res.status(503).json({
+      error: 'ApiKeyServiceNotConfigured',
+      message: 'API key service requires DATABASE_URL.',
+    });
+  }
+
+  const partnerId = String(req.body?.partnerId || '').trim();
+  const name = String(req.body?.name || '').trim();
+
+  if (!partnerId || !name) {
+    return res.status(400).json({
+      error: 'BadRequest',
+      message: 'partnerId and name are required.',
+    });
+  }
+
+  try {
+    const created = await createApiKey({
+      ownerUserId: req.auth.sub,
+      partnerId,
+      name,
+      environment: req.body?.environment,
+      role: req.body?.role,
+      scopes: req.body?.scopes,
+      notes: req.body?.notes,
+      expiresAt: req.body?.expiresAt,
+    });
+
+    await writeAuditLog({
+      actorUserId: req.auth.sub,
+      action: 'api_key_created',
+      resourceType: 'api_key',
+      resourceId: created.apiKey.id,
+      ip: req.ip,
+      userAgent: req.header('user-agent'),
+      metadata: {
+        partnerId: created.apiKey.partnerId,
+        keyPrefix: created.apiKey.keyPrefix,
+        role: created.apiKey.role,
+      },
+    });
+
+    return res.status(201).json(created);
+  } catch (err) {
+    return res.status(500).json({
+      error: 'ApiKeyCreateFailed',
+      message: err.message || 'Unknown error',
+    });
+  }
+});
+
+app.post('/api-keys/:id/revoke', ...requireApiKeyAdmin, async (req, res) => {
+  if (!isApiKeyServiceConfigured()) {
+    return res.status(503).json({
+      error: 'ApiKeyServiceNotConfigured',
+      message: 'API key service requires DATABASE_URL.',
+    });
+  }
+
+  try {
+    const existing = await findApiKeyById(req.params.id);
+    if (!existing) {
+      return res.status(404).json({
+        error: 'NotFound',
+        message: 'API key not found.',
+      });
+    }
+
+    const revoked = await revokeApiKey(req.params.id);
+    await writeAuditLog({
+      actorUserId: req.auth.sub,
+      action: 'api_key_revoked',
+      resourceType: 'api_key',
+      resourceId: revoked.id,
+      ip: req.ip,
+      userAgent: req.header('user-agent'),
+      metadata: {
+        partnerId: revoked.partnerId,
+        keyPrefix: revoked.keyPrefix,
+      },
+    });
+
+    return res.json({ apiKey: revoked });
+  } catch (err) {
+    return res.status(500).json({
+      error: 'ApiKeyRevokeFailed',
+      message: err.message || 'Unknown error',
+    });
+  }
+});
+
+app.post('/api-keys/:id/reactivate', ...requireApiKeyAdmin, async (req, res) => {
+  if (!isApiKeyServiceConfigured()) {
+    return res.status(503).json({
+      error: 'ApiKeyServiceNotConfigured',
+      message: 'API key service requires DATABASE_URL.',
+    });
+  }
+
+  try {
+    const existing = await findApiKeyById(req.params.id);
+    if (!existing) {
+      return res.status(404).json({
+        error: 'NotFound',
+        message: 'API key not found.',
+      });
+    }
+
+    const apiKey = await reactivateApiKey(req.params.id);
+    await writeAuditLog({
+      actorUserId: req.auth.sub,
+      action: 'api_key_reactivated',
+      resourceType: 'api_key',
+      resourceId: apiKey.id,
+      ip: req.ip,
+      userAgent: req.header('user-agent'),
+      metadata: {
+        partnerId: apiKey.partnerId,
+        keyPrefix: apiKey.keyPrefix,
+      },
+    });
+
+    return res.json({ apiKey });
+  } catch (err) {
+    return res.status(500).json({
+      error: 'ApiKeyReactivateFailed',
+      message: err.message || 'Unknown error',
+    });
+  }
+});
+
+app.patch('/api-keys/:id', ...requireApiKeyAdmin, async (req, res) => {
+  if (!isApiKeyServiceConfigured()) {
+    return res.status(503).json({
+      error: 'ApiKeyServiceNotConfigured',
+      message: 'API key service requires DATABASE_URL.',
+    });
+  }
+
+  try {
+    const existing = await findApiKeyById(req.params.id);
+    if (!existing) {
+      return res.status(404).json({
+        error: 'NotFound',
+        message: 'API key not found.',
+      });
+    }
+
+    const apiKey = await updateApiKey(req.params.id, {
+      name: req.body?.name,
+      role: req.body?.role,
+      scopes: req.body?.scopes,
+      notes: req.body?.notes,
+      expiresAt: req.body?.expiresAt,
+      isActive: req.body?.isActive,
+    });
+
+    await writeAuditLog({
+      actorUserId: req.auth.sub,
+      action: 'api_key_updated',
+      resourceType: 'api_key',
+      resourceId: apiKey.id,
+      ip: req.ip,
+      userAgent: req.header('user-agent'),
+      metadata: {
+        partnerId: apiKey.partnerId,
+        keyPrefix: apiKey.keyPrefix,
+      },
+    });
+
+    return res.json({ apiKey });
+  } catch (err) {
+    return res.status(500).json({
+      error: 'ApiKeyUpdateFailed',
+      message: err.message || 'Unknown error',
+    });
+  }
+});
+
+app.get('/apartments', rateLimitMiddleware, requirePartnerAccess, async (req, res) => {
   if (isLiveRequestRunning) {
     return res.status(409).json({
       error: 'Conflict',
@@ -249,7 +488,8 @@ app.get('/apartments', rateLimitMiddleware, authMiddleware, async (req, res) => 
     return res.json({
       apartments,
       meta: {
-        requestedBy: req.authUser.id,
+        requestedBy: req.authActor?.partnerId || req.authUser.id,
+        authType: req.authActor?.type || 'legacy',
         count: apartments.length,
         startedAt: startedAt.toISOString(),
         finishedAt: finishedAt.toISOString(),
