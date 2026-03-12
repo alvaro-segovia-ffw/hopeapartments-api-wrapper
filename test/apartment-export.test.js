@@ -110,3 +110,19 @@ test('chunk and extract helpers keep expected behavior', () => {
   assert.deepEqual(_test.extractPicturesRecords({ records: [7] }), [7]);
   assert.deepEqual(_test.extractPicturesRecords({ nope: true }), []);
 });
+
+test('getEstateLanguage defaults to ENG and supports env override', () => {
+  const previous = process.env.ONOFFICE_ESTATE_LANGUAGE;
+
+  delete process.env.ONOFFICE_ESTATE_LANGUAGE;
+  assert.equal(_test.getEstateLanguage(), 'ENG');
+
+  process.env.ONOFFICE_ESTATE_LANGUAGE = 'DEU';
+  assert.equal(_test.getEstateLanguage(), 'DEU');
+
+  if (previous === undefined) {
+    delete process.env.ONOFFICE_ESTATE_LANGUAGE;
+  } else {
+    process.env.ONOFFICE_ESTATE_LANGUAGE = previous;
+  }
+});
