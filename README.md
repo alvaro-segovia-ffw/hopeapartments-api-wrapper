@@ -148,9 +148,12 @@ Starts the server (default `http://localhost:3000`).
 
 If `ADMIN_UI_ENABLED=true`, an internal operational UI is served at:
 
+- `GET /admin/login`
 - `GET /admin`
 
-The page itself is static, but all actions require a Bearer token from an `admin` or `developer` user. Use it for:
+`/admin/login` signs in via `POST /auth/login` and redirects to `/admin`.
+The dashboard uses the stored admin session and redirects back to `/admin/login` if there is no valid token.
+Use it for:
 
 - signing in with email/password via `POST /auth/login`
 - viewing API key stats

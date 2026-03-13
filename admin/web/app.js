@@ -1,15 +1,12 @@
 'use strict';
 
 const storageKey = 'hope-admin-token';
+const loginPath = '/admin/login';
 
 const els = {
   baseUrl: document.getElementById('baseUrl'),
-  loginForm: document.getElementById('loginForm'),
-  loginEmail: document.getElementById('loginEmail'),
-  loginPassword: document.getElementById('loginPassword'),
   loginStatus: document.getElementById('loginStatus'),
   sessionSummary: document.getElementById('sessionSummary'),
-  accessToken: document.getElementById('accessToken'),
   btnLoad: document.getElementById('btnLoad'),
   btnClear: document.getElementById('btnClear'),
   statsStatus: document.getElementById('statsStatus'),
@@ -37,12 +34,24 @@ function normalizedBaseUrl() {
   return (els.baseUrl.value || '').trim().replace(/\/+$/, '') || window.location.origin;
 }
 
+function getStoredToken() {
+  return localStorage.getItem(storageKey) || '';
+}
+
 function getToken() {
-  const token = els.accessToken.value.trim();
+  const token = getStoredToken().trim();
   if (!token) {
-    throw new Error('Bearer token is required.');
+    throw new Error('Missing admin session.');
   }
   return token;
+}
+
+function redirectToLogin() {
+  window.location.href = loginPath;
+}
+
+function clearSession() {
+  localStorage.removeItem(storageKey);
 }
 
 function writeJson(el, payload) {
@@ -67,29 +76,19 @@ async function apiFetch(path, options = {}) {
   });
 
   const payload = await parseJsonResponse(res);
+  if (res.status === 401 || res.status === 403) {
+    clearSession();
+    throw new Error(payload?.message || 'Session expired or not authorized.');
+  }
   if (!res.ok) {
-    const message = payload?.message || `HTTP ${res.status}`;
-    throw new Error(message);
+    throw new Error(payload?.message || `HTTP ${res.status}`);
   }
   return payload;
 }
 
-function rememberToken() {
-  localStorage.setItem(storageKey, els.accessToken.value.trim());
-}
-
-function restoreToken() {
-  const token = localStorage.getItem(storageKey);
-  if (token) els.accessToken.value = token;
-}
-
-function clearSessionSummary() {
-  els.sessionSummary.textContent = 'No active session.';
-}
-
 function renderSession(user) {
   if (!user) {
-    clearSessionSummary();
+    els.sessionSummary.textContent = 'No active session.';
     return;
   }
 
@@ -162,6 +161,7 @@ async function loadStats() {
   } catch (err) {
     setStatus(els.statsStatus, 'error', false);
     writeJson(els.keyActionOutput, { error: err.message });
+    if (/session|authorized/i.test(err.message)) redirectToLogin();
   }
 }
 
@@ -174,6 +174,7 @@ async function loadApiKeys() {
   } catch (err) {
     setStatus(els.keysStatus, 'error', false);
     writeJson(els.keyActionOutput, { error: err.message });
+    if (/session|authorized/i.test(err.message)) redirectToLogin();
   }
 }
 
@@ -193,6 +194,7 @@ async function loadAuditLogs(filters = {}) {
   } catch (err) {
     setStatus(els.auditStatus, 'error', false);
     writeJson(els.auditOutput, { error: err.message });
+    if (/session|authorized/i.test(err.message)) redirectToLogin();
   }
 }
 
@@ -224,6 +226,7 @@ async function createApiKey(event) {
   } catch (err) {
     setStatus(els.createStatus, 'error', false);
     writeJson(els.createOutput, { error: err.message });
+    if (/session|authorized/i.test(err.message)) redirectToLogin();
   }
 }
 
@@ -247,80 +250,48 @@ async function handleKeyAction(event) {
     await Promise.all([loadApiKeys(), loadStats(), loadAuditLogs({ limit: 20 })]);
   } catch (err) {
     writeJson(els.keyActionOutput, { error: err.message, action, id });
+    if (/session|authorized/i.test(err.message)) redirectToLogin();
   }
-}
-
-async function loadDashboard() {
-  rememberToken();
-  await Promise.all([loadStats(), loadApiKeys(), loadAuditLogs({ limit: 20 })]);
 }
 
 async function fetchCurrentSession() {
-  try {
-    const payload = await apiFetch('/auth/me');
-    renderSession(payload.user || null);
-    return payload.user || null;
-  } catch (_err) {
-    clearSessionSummary();
-    return null;
-  }
+  const payload = await apiFetch('/auth/me');
+  renderSession(payload.user || null);
+  return payload.user || null;
 }
 
-async function login(event) {
-  event.preventDefault();
-  setStatus(els.loginStatus, 'signing in...', null);
-
-  const email = String(els.loginEmail.value || '').trim();
-  const password = String(els.loginPassword.value || '');
-  if (!email || !password) {
-    setStatus(els.loginStatus, 'error', false);
-    els.sessionSummary.textContent = 'Email and password are required.';
-    return;
-  }
-
-  try {
-    const res = await fetch(`${normalizedBaseUrl()}/auth/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password }),
-    });
-    const payload = await parseJsonResponse(res);
-    if (!res.ok) {
-      throw new Error(payload?.message || `HTTP ${res.status}`);
-    }
-
-    els.accessToken.value = payload.accessToken || '';
-    rememberToken();
-    els.loginPassword.value = '';
-    renderSession(payload.user || null);
-    setStatus(els.loginStatus, 'signed in', true);
-    await loadDashboard();
-  } catch (err) {
-    setStatus(els.loginStatus, 'error', false);
-    els.sessionSummary.textContent = err.message;
-  }
+async function loadDashboard() {
+  await Promise.all([loadStats(), loadApiKeys(), loadAuditLogs({ limit: 20 })]);
 }
 
-async function bootstrapSession() {
-  restoreToken();
-  if (!els.accessToken.value.trim()) {
-    clearSessionSummary();
+async function bootstrap() {
+  const token = getStoredToken().trim();
+  if (!token) {
+    redirectToLogin();
     return;
   }
 
   setStatus(els.loginStatus, 'checking session...', null);
-  const user = await fetchCurrentSession();
-  setStatus(els.loginStatus, user ? 'session ready' : 'token invalid', Boolean(user));
+  try {
+    const user = await fetchCurrentSession();
+    setStatus(els.loginStatus, 'session ready', true);
+    if (!user) {
+      clearSession();
+      redirectToLogin();
+      return;
+    }
+    await loadDashboard();
+  } catch (_err) {
+    setStatus(els.loginStatus, 'token invalid', false);
+    clearSession();
+    redirectToLogin();
+  }
 }
 
-els.loginForm.addEventListener('submit', login);
 els.btnLoad.addEventListener('click', loadDashboard);
 els.btnClear.addEventListener('click', () => {
-  localStorage.removeItem(storageKey);
-  els.accessToken.value = '';
-  els.loginPassword.value = '';
-  setStatus(els.loginStatus, 'idle', null);
-  clearSessionSummary();
+  clearSession();
+  redirectToLogin();
 });
 els.createForm.addEventListener('submit', createApiKey);
 els.keysTable.addEventListener('click', handleKeyAction);
@@ -335,4 +306,4 @@ els.auditForm.addEventListener('submit', (event) => {
   });
 });
 
-bootstrapSession();
+bootstrap();

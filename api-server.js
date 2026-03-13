@@ -178,9 +178,15 @@ if (ENABLE_PLAYGROUND) {
 }
 
 if (ADMIN_UI_ENABLED) {
-  app.use('/admin', express.static(adminDir));
+  app.use('/admin', express.static(adminDir, { index: false }));
   app.get('/admin', (_req, res) => {
+    return res.redirect('/admin/dashboard');
+  });
+  app.get('/admin/dashboard', (_req, res) => {
     res.sendFile(path.join(adminDir, 'index.html'));
+  });
+  app.get('/admin/login', (_req, res) => {
+    res.sendFile(path.join(adminDir, 'login.html'));
   });
 }
 
