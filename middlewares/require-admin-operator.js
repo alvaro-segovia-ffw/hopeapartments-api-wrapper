@@ -89,6 +89,7 @@ async function requireAdminPageSession(req, res, next) {
 
 module.exports = {
   adminCookieName,
+  authenticateAdminOperator,
   requireAdminOperator,
   requireAdminPageSession,
   userHasAdminConsoleAccess,

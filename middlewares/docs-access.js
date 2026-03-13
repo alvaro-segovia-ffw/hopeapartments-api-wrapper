@@ -1,5 +1,6 @@
 'use strict';
 
+const { authenticateAdminOperator } = require('./require-admin-operator');
 const { requireAuth } = require('./require-auth');
 const { requireRole } = require('./require-role');
 
@@ -14,12 +15,17 @@ function docsAvailabilityMiddleware(enabled) {
   };
 }
 
-function requireDocsAccess(req, res, next) {
+async function requireDocsAccess(req, res, next) {
   const requireDocsRole = requireRole(...DOCS_ALLOWED_ROLES);
-  return requireAuth(req, res, (authErr) => {
-    if (authErr) return next(authErr);
-    return requireDocsRole(req, res, next);
-  });
+  try {
+    await authenticateAdminOperator(req);
+    return next();
+  } catch (_adminErr) {
+    return requireAuth(req, res, (authErr) => {
+      if (authErr) return next(authErr);
+      return requireDocsRole(req, res, next);
+    });
+  }
 }
 
 module.exports = {

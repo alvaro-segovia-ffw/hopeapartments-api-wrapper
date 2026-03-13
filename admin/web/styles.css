@@ -195,7 +195,29 @@ button:hover {
   background: var(--brand-dark);
 }
 
+.button-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  padding: 10px 16px;
+  background: var(--brand);
+  color: #fffaf5;
+  font: inherit;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.button-link:hover {
+  background: var(--brand-dark);
+}
+
 button.ghost {
+  background: #ece4d5;
+  color: var(--ink);
+}
+
+.ghost-link {
   background: #ece4d5;
   color: var(--ink);
 }
