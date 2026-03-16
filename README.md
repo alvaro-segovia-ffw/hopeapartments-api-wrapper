@@ -14,7 +14,6 @@ Hope Apartments API is a Node.js service that fetches live apartment data from o
 - [Run Modes](#run-modes)
 - [API](#api)
 - [Swagger](#swagger)
-- [Playground](#playground)
 - [Security Notes](#security-notes)
 - [Deployment](#deployment)
 - [Troubleshooting](#troubleshooting)
@@ -41,8 +40,7 @@ Each request performs a live sync from onOffice and returns transformed apartmen
 - Partner authentication with `X-API-Key`.
 - Optional database-backed auth for real users (`/auth/login`, `/auth/me`).
 - Concurrency protection (single live sync at a time).
-- Web playground to test `X-API-Key` access and inspect responses.
-- Optional CLI export script that writes JSON files to `exports/`.
+- Optional CLI export script that writes JSON files to `exports/apartments/`.
 
 ## Architecture
 
@@ -58,18 +56,22 @@ Each request performs a live sync from onOffice and returns transformed apartmen
 
 ```text
 .
-├── api-server.js                 # HTTP server and auth middleware
-├── export-apartments.js          # CLI JSON export entrypoint
+├── api-server.js                 # Compatibility wrapper for the HTTP server entrypoint
+├── export-apartments.js          # Compatibility wrapper for the CLI export entrypoint
 ├── lib/
 │   ├── apartment-export.js       # onOffice fetch + transformation logic
 │   └── load-dotenv.js            # Minimal .env loader
-├── playground/
-│   ├── README.md
-│   └── web/
-│       ├── index.html
-│       ├── app.js
-│       └── styles.css
-├── exports/                      # Generated JSON files (CLI mode)
+├── scripts/
+│   ├── export-apartments.js      # CLI JSON export entrypoint
+│   └── geocode-apartments.js     # CLI geocoding/export helper
+├── src/
+│   ├── server/
+│   │   ├── app.js                # Express app + route wiring
+│   │   └── middlewares/          # HTTP middleware layer
+│   └── public/
+│       ├── admin/                # Admin static assets
+│       └── site/                 # Public site static assets
+├── exports/                      # Generated exports and derived files
 ├── .env.example
 └── README.md
 ```
@@ -122,10 +124,14 @@ Core variables:
 - `JWT_AUDIENCE`: optional JWT audience (default `hope-apartments-clients`)
 - `BCRYPT_ROUNDS`: optional bcrypt cost (default `12`)
 - `EXPORT_API_PORT`: API port (example: `3000`)
-- `EXPORT_API_ENABLE_PLAYGROUND`: optional (`true/false`), default `true` in non-production and `false` in production
 - `EXPORT_API_RATE_LIMIT_ENABLED`: optional (`true/false`), enables in-memory rate limiting on `GET /apartments`
 - `EXPORT_API_RATE_LIMIT_WINDOW_SEC`: optional positive integer window in seconds (default `60`)
 - `EXPORT_API_RATE_LIMIT_MAX_REQUESTS`: optional positive integer max requests per window (default `60`)
+- `GEOCODER_USER_AGENT`: required for the bulk geocoding script, should identify your app/contact
+- `GEOCODER_EMAIL`: optional contact email sent to the geocoder
+- `GEOCODER_COUNTRY_CODE`: optional geocoding country filter (default `de`)
+- `GEOCODER_DELAY_MS`: optional delay between requests in ms (default `1100`)
+- `GEOCODER_TIMEOUT_MS`: optional timeout in ms for inline geocoding fallback on `GET /apartments` (default `4000`)
 
 ## Run Modes
 
@@ -177,7 +183,21 @@ The service supports two documentation surfaces:
 npm run export
 ```
 
-Generates timestamped JSON files under `exports/`.
+Generates timestamped JSON files under `exports/apartments/`.
+
+### CLI Geocoding Mode
+
+```bash
+npm run geocode:apartments
+```
+
+Fetches live estate addresses from onOffice, geocodes them, and writes:
+
+- `exports/geocoding/geocoded-apartments_<timestamp>.csv`
+- `exports/geocoding/geocoded-apartments_<timestamp>_onoffice-import.csv`
+- `exports/geocoding/geocoded-apartments_<timestamp>.json`
+
+The `_onoffice-import.csv` file contains only `ImmoNr`, `breitengrad`, and `laengengrad` for simpler onOffice import. The script reads `ImmoNr` from the onOffice API field `objektnr_extern` and also keeps the technical `Id` in the detailed CSV for troubleshooting. By default the script skips estates that already have coordinates. Use `npm run geocode:apartments -- --force` to recalculate all coordinates.
 
 ## API
 
@@ -369,20 +389,6 @@ curl -X GET "http://localhost:3000/apartments" \
 - `500 LiveFetchFailed`: onOffice call or mapping failed.
 
 Partner access is managed entirely through API keys.
-
-## Playground
-
-- `GET /playground`
-
-Web UI for manual testing:
-
-1. Enter API base URL.
-2. Enter the partner API key.
-3. Click `Fetch Apartments JSON`.
-
-More details in [playground/README.md](playground/README.md).
-
-Note: in `NODE_ENV=production`, playground is disabled by default unless `EXPORT_API_ENABLE_PLAYGROUND=true`.
 
 ## Security Notes
 

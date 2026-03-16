@@ -399,6 +399,16 @@
           "address": {
             "$ref": "#/components/schemas/Address"
           },
+          "latitude": {
+            "type": "number",
+            "nullable": true,
+            "example": 52.520008
+          },
+          "longitude": {
+            "type": "number",
+            "nullable": true,
+            "example": 13.404954
+          },
           "roomsTotal": {
             "type": "number",
             "nullable": true,
@@ -458,6 +468,8 @@
         "required": [
           "id",
           "address",
+          "latitude",
+          "longitude",
           "roomsTotal",
           "bedrooms",
           "bathrooms",

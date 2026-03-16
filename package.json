@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node api-server.js",
     "export": "node export-apartments.js",
+    "geocode:apartments": "node scripts/geocode-apartments.js",
     "api": "node api-server.js",
     "test": "node --test"
   },
