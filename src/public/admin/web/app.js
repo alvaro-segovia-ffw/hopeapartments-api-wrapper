@@ -33,6 +33,8 @@ const els = {
   keysStatus: document.getElementById('keysStatus'),
   btnRefreshKeys: document.getElementById('btnRefreshKeys'),
   keysTable: document.getElementById('keysTable'),
+  keyDetailCard: document.getElementById('keyDetailCard'),
+  keyDetailActions: document.getElementById('keyDetailActions'),
   keyActionOutput: document.getElementById('keyActionOutput'),
   auditStatus: document.getElementById('auditStatus'),
   auditForm: document.getElementById('auditForm'),
@@ -41,6 +43,11 @@ const els = {
   views: Array.from(document.querySelectorAll('[data-view]')),
   viewTitle: document.getElementById('viewTitle'),
   viewDescription: document.getElementById('viewDescription'),
+};
+
+const state = {
+  apiKeys: [],
+  selectedApiKeyId: null,
 };
 
 function setStatus(el, label, ok) {
@@ -204,22 +211,70 @@ function keyActionButtons(apiKey) {
   return actions;
 }
 
+function findSelectedApiKey() {
+  return state.apiKeys.find((apiKey) => apiKey.publicId === state.selectedApiKeyId) || null;
+}
+
+function renderKeyDetail(apiKey) {
+  clearChildren(els.keyDetailCard);
+
+  if (!apiKey) {
+    els.keyDetailActions.hidden = true;
+    clearChildren(els.keyDetailActions);
+    appendTextElement(els.keyDetailCard, 'p', 'Select an API key from the directory.', 'empty mb-0');
+    return;
+  }
+
+  const detailItems = [
+    ['Partner', apiKey.partnerId || '-'],
+    ['Name', apiKey.name || '-'],
+    ['Public ID', apiKey.publicId || '-'],
+    ['Prefix', apiKey.keyPrefix || '-'],
+    ['Role', apiKey.role || '-'],
+    ['Scopes', Array.isArray(apiKey.scopes) && apiKey.scopes.length ? apiKey.scopes.join(', ') : '-'],
+    ['Status', apiKey.isActive ? 'active' : 'revoked'],
+    ['Last used', apiKey.lastUsedAt || '-'],
+    ['Expires at', apiKey.expiresAt || '-'],
+    ['Created at', apiKey.createdAt || '-'],
+  ];
+
+  for (const [label, value] of detailItems) {
+    const row = document.createElement('div');
+    row.className = 'detail-row';
+    appendTextElement(row, 'span', label, 'detail-label');
+    appendTextElement(row, 'strong', value, 'detail-value');
+    els.keyDetailCard.appendChild(row);
+  }
+
+  clearChildren(els.keyDetailActions);
+  els.keyDetailActions.hidden = false;
+  els.keyDetailActions.appendChild(keyActionButtons(apiKey));
+}
+
 function renderApiKeys(apiKeys) {
+  state.apiKeys = Array.isArray(apiKeys) ? apiKeys : [];
+  if (!findSelectedApiKey()) {
+    state.selectedApiKeyId = state.apiKeys[0]?.publicId || null;
+  }
+
   clearChildren(els.keysTable);
 
-  if (!apiKeys.length) {
+  if (!state.apiKeys.length) {
     const row = document.createElement('tr');
     const cell = document.createElement('td');
-    cell.colSpan = 6;
+    cell.colSpan = 5;
     cell.className = 'empty';
     cell.textContent = 'No API keys found.';
     row.appendChild(cell);
     els.keysTable.appendChild(row);
+    renderKeyDetail(null);
     return;
   }
 
-  for (const apiKey of apiKeys) {
+  for (const apiKey of state.apiKeys) {
     const row = document.createElement('tr');
+    row.dataset.keyId = apiKey.publicId;
+    row.classList.toggle('selected', apiKey.publicId === state.selectedApiKeyId);
 
     appendTextElement(row, 'td', apiKey.partnerId || '-');
     appendTextElement(row, 'td', apiKey.name || '-');
@@ -234,15 +289,10 @@ function renderApiKeys(apiKeys) {
 
     appendTextElement(row, 'td', apiKey.lastUsedAt || '-');
 
-    const actionsCell = document.createElement('td');
-    const actionsRow = document.createElement('div');
-    actionsRow.className = 'row-actions';
-    actionsRow.appendChild(keyActionButtons(apiKey));
-    actionsCell.appendChild(actionsRow);
-    row.appendChild(actionsCell);
-
     els.keysTable.appendChild(row);
   }
+
+  renderKeyDetail(findSelectedApiKey());
 }
 
 function handleAuthError(err) {
@@ -354,6 +404,14 @@ async function handleKeyAction(event) {
   }
 }
 
+function handleKeySelection(event) {
+  const row = event.target.closest('tr[data-key-id]');
+  if (!row) return;
+
+  state.selectedApiKeyId = row.dataset.keyId;
+  renderApiKeys(state.apiKeys);
+}
+
 async function fetchCurrentSession() {
   const payload = await apiFetch('/admin/session');
   renderSession(payload.user || null);
@@ -393,7 +451,9 @@ async function bootstrap() {
 
 els.btnLoad.addEventListener('click', loadDashboard);
 els.createForm.addEventListener('submit', createApiKey);
+els.keysTable.addEventListener('click', handleKeySelection);
 els.keysTable.addEventListener('click', handleKeyAction);
+els.keyDetailActions.addEventListener('click', handleKeyAction);
 els.btnRefreshKeys.addEventListener('click', loadApiKeys);
 els.auditForm.addEventListener('submit', (event) => {
   event.preventDefault();

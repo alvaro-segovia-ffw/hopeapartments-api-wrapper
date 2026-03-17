@@ -356,6 +356,15 @@ th {
   padding: 0.95rem 0.8rem;
 }
 
+.admin-table tbody tr {
+  cursor: pointer;
+}
+
+.admin-table tbody tr.selected {
+  --bs-table-accent-bg: rgba(183, 86, 43, 0.12);
+  box-shadow: inset 3px 0 0 var(--admin-brand);
+}
+
 .empty {
   text-align: center;
   color: var(--admin-muted);
@@ -365,6 +374,10 @@ th {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
+}
+
+.row-actions-detail {
+  justify-content: flex-start;
 }
 
 .row-actions button {
@@ -422,6 +435,35 @@ th {
 .session-stack {
   display: grid;
   gap: 1rem;
+}
+
+.key-detail-card {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.detail-row {
+  padding: 0.95rem 1rem;
+  border-radius: 1rem;
+  border: 1px solid var(--admin-line);
+  background: rgba(255, 255, 255, 0.68);
+}
+
+.detail-label {
+  display: block;
+  color: var(--admin-brand-dark);
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.detail-value {
+  display: block;
+  margin-top: 0.3rem;
+  color: var(--admin-ink);
+  line-height: 1.45;
+  word-break: break-word;
 }
 
 code {
