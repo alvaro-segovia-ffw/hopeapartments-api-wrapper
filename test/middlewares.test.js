@@ -14,6 +14,11 @@ const {
 const { PublicError } = require('../src/server/errors/public-error');
 const { adminCookieName, extractAdminToken } = require('../src/server/middlewares/require-admin-operator');
 const { DOCS_REQUIRED_PERMISSION } = require('../middlewares/docs-access');
+const {
+  requireConfiguredApiKeyService,
+  requireConfiguredAuditService,
+  requireConfiguredAuth,
+} = require('../src/server/middlewares/require-configured-service');
 const { errorHandler } = require('../src/server/middlewares/error-handler');
 const { requirePermission } = require('../src/server/middlewares/require-permission');
 const {
@@ -100,6 +105,64 @@ test('requireRole blocks non-matching roles', () => {
 
 test('docs access now requires explicit internal permission', () => {
   assert.equal(DOCS_REQUIRED_PERMISSION, INTERNAL_PERMISSIONS.DOCS_READ_INTERNAL);
+});
+
+test('requireConfiguredAuth yields 503 when auth is not configured', () => {
+  const previousDatabaseUrl = process.env.DATABASE_URL;
+  const previousJwtSecret = process.env.JWT_ACCESS_SECRET;
+  delete process.env.DATABASE_URL;
+  delete process.env.JWT_ACCESS_SECRET;
+
+  const res = createResponseDouble();
+  let forwardedError = null;
+
+  requireConfiguredAuth({}, res, (err) => {
+    forwardedError = err;
+  });
+
+  assert.equal(forwardedError instanceof PublicError, true);
+  assert.equal(forwardedError.code, 'AUTH_NOT_CONFIGURED');
+
+  if (previousDatabaseUrl === undefined) delete process.env.DATABASE_URL;
+  else process.env.DATABASE_URL = previousDatabaseUrl;
+  if (previousJwtSecret === undefined) delete process.env.JWT_ACCESS_SECRET;
+  else process.env.JWT_ACCESS_SECRET = previousJwtSecret;
+});
+
+test('requireConfiguredApiKeyService yields 503 when database is not configured', () => {
+  const previousDatabaseUrl = process.env.DATABASE_URL;
+  delete process.env.DATABASE_URL;
+
+  const res = createResponseDouble();
+  let forwardedError = null;
+
+  requireConfiguredApiKeyService({}, res, (err) => {
+    forwardedError = err;
+  });
+
+  assert.equal(forwardedError instanceof PublicError, true);
+  assert.equal(forwardedError.code, 'API_KEY_SERVICE_NOT_CONFIGURED');
+
+  if (previousDatabaseUrl === undefined) delete process.env.DATABASE_URL;
+  else process.env.DATABASE_URL = previousDatabaseUrl;
+});
+
+test('requireConfiguredAuditService yields 503 when database is not configured', () => {
+  const previousDatabaseUrl = process.env.DATABASE_URL;
+  delete process.env.DATABASE_URL;
+
+  const res = createResponseDouble();
+  let forwardedError = null;
+
+  requireConfiguredAuditService({}, res, (err) => {
+    forwardedError = err;
+  });
+
+  assert.equal(forwardedError instanceof PublicError, true);
+  assert.equal(forwardedError.code, 'AUDIT_SERVICE_NOT_CONFIGURED');
+
+  if (previousDatabaseUrl === undefined) delete process.env.DATABASE_URL;
+  else process.env.DATABASE_URL = previousDatabaseUrl;
 });
 
 test('extractAdminToken ignores cookie sessions when bearer auth is required', () => {
