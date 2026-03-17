@@ -1,5 +1,6 @@
 'use strict';
 
+const { buildApiKeyScopeDeniedAuditEntry } = require('../audit/audit-recorder');
 const { writeAuditLog } = require('../../../lib/audit-service');
 const { PublicError } = require('../errors/public-error');
 
@@ -11,29 +12,6 @@ function getApiKeyScopes(req) {
 
 function hasRequiredScope(req, requiredScope) {
   return getApiKeyScopes(req).includes(requiredScope);
-}
-
-function buildScopeAuditEntry(req, requiredScope) {
-  const apiKey = req.apiKey || {};
-  const scopes = getApiKeyScopes(req);
-
-  return {
-    actorApiKeyId: apiKey.id || req.authActor?.id || null,
-    action: 'api_key_scope_denied',
-    resourceType: 'api_key',
-    resourceId: apiKey.id || req.authActor?.id || null,
-    ip: req.ip,
-    userAgent: typeof req.header === 'function' ? req.header('user-agent') : null,
-    metadata: {
-      partnerId: apiKey.partnerId || req.authActor?.partnerId || null,
-      keyPrefix: apiKey.keyPrefix || null,
-      requiredScope,
-      scopes,
-      enforced: true,
-      method: req.method || null,
-      route: req.originalUrl || req.url || null,
-    },
-  };
 }
 
 function requireApiKeyScope(requiredScope, options = {}) {
@@ -53,7 +31,7 @@ function requireApiKeyScope(requiredScope, options = {}) {
     if (hasRequiredScope(req, requiredScope)) return next();
 
     try {
-      await auditLogWriter(buildScopeAuditEntry(req, requiredScope));
+      await auditLogWriter(buildApiKeyScopeDeniedAuditEntry(req, requiredScope));
     } catch (_err) {
       // Scope enforcement should not fail open or break requests because audit persistence failed.
     }
@@ -71,7 +49,7 @@ function requireApiKeyScope(requiredScope, options = {}) {
 module.exports = {
   requireApiKeyScope,
   _test: {
-    buildScopeAuditEntry,
+    buildScopeAuditEntry: buildApiKeyScopeDeniedAuditEntry,
     getApiKeyScopes,
     hasRequiredScope,
   },

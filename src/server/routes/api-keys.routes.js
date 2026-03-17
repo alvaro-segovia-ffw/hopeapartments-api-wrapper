@@ -12,8 +12,14 @@ const {
   rotateApiKey,
   updateApiKey,
 } = require('../../../lib/api-key-service');
-const { writeAuditLog } = require('../../../lib/audit-service');
 const { INTERNAL_PERMISSIONS } = require('../authz/internal-permissions');
+const {
+  recordApiKeyCreated,
+  recordApiKeyReactivated,
+  recordApiKeyRevoked,
+  recordApiKeyRotated,
+  recordApiKeyUpdated,
+} = require('../audit/audit-recorder');
 const { PublicError } = require('../errors/public-error');
 const { requireAdminOperator } = require('../middlewares/require-admin-operator');
 const { requireConfiguredAuth } = require('../middlewares/require-configured-auth');
@@ -92,19 +98,7 @@ function buildApiKeysRouter({ asyncHandler }) {
         ...validatedInput,
       });
 
-      await writeAuditLog({
-        actorUserId: req.auth.sub,
-        action: 'api_key_created',
-        resourceType: 'api_key',
-        resourceId: created.apiKey.id,
-        ip: req.ip,
-        userAgent: req.header('user-agent'),
-        metadata: {
-          partnerId: created.apiKey.partnerId,
-          keyPrefix: created.apiKey.keyPrefix,
-          role: created.apiKey.role,
-        },
-      });
+      await recordApiKeyCreated(req, created.apiKey);
 
       return res.status(201).json({
         apiKey: serializeApiKey(created.apiKey),
@@ -132,18 +126,7 @@ function buildApiKeysRouter({ asyncHandler }) {
       }
 
       const revoked = await revokeApiKey(apiKeyId);
-      await writeAuditLog({
-        actorUserId: req.auth.sub,
-        action: 'api_key_revoked',
-        resourceType: 'api_key',
-        resourceId: revoked.id,
-        ip: req.ip,
-        userAgent: req.header('user-agent'),
-        metadata: {
-          partnerId: revoked.partnerId,
-          keyPrefix: revoked.keyPrefix,
-        },
-      });
+      await recordApiKeyRevoked(req, revoked);
 
       return res.json({ apiKey: serializeApiKey(revoked) });
     })
@@ -168,18 +151,7 @@ function buildApiKeysRouter({ asyncHandler }) {
       }
 
       const apiKey = await reactivateApiKey(apiKeyId);
-      await writeAuditLog({
-        actorUserId: req.auth.sub,
-        action: 'api_key_reactivated',
-        resourceType: 'api_key',
-        resourceId: apiKey.id,
-        ip: req.ip,
-        userAgent: req.header('user-agent'),
-        metadata: {
-          partnerId: apiKey.partnerId,
-          keyPrefix: apiKey.keyPrefix,
-        },
-      });
+      await recordApiKeyReactivated(req, apiKey);
 
       return res.json({ apiKey: serializeApiKey(apiKey) });
     })
@@ -203,19 +175,7 @@ function buildApiKeysRouter({ asyncHandler }) {
         });
       }
 
-      await writeAuditLog({
-        actorUserId: req.auth.sub,
-        action: 'api_key_rotated',
-        resourceType: 'api_key',
-        resourceId: rotated.apiKey.id,
-        ip: req.ip,
-        userAgent: req.header('user-agent'),
-        metadata: {
-          previousApiKeyId: rotated.previousApiKeyId,
-          partnerId: rotated.apiKey.partnerId,
-          keyPrefix: rotated.apiKey.keyPrefix,
-        },
-      });
+      await recordApiKeyRotated(req, rotated);
 
       return res.json(serializeRotatedApiKey(rotated));
     })
@@ -242,18 +202,7 @@ function buildApiKeysRouter({ asyncHandler }) {
       const validatedInput = validateUpdateApiKeyInput(req.body);
       const apiKey = await updateApiKey(apiKeyId, validatedInput);
 
-      await writeAuditLog({
-        actorUserId: req.auth.sub,
-        action: 'api_key_updated',
-        resourceType: 'api_key',
-        resourceId: apiKey.id,
-        ip: req.ip,
-        userAgent: req.header('user-agent'),
-        metadata: {
-          partnerId: apiKey.partnerId,
-          keyPrefix: apiKey.keyPrefix,
-        },
-      });
+      await recordApiKeyUpdated(req, apiKey);
 
       return res.json({ apiKey: serializeApiKey(apiKey) });
     })
