@@ -1,8 +1,7 @@
 'use strict';
 
-const { parseApiKey } = require('../../../lib/api-key');
-const { writeAuditLog } = require('../../../lib/audit-service');
 const { verifyApiKey, isApiKeyServiceConfigured } = require('../../../lib/api-key-service');
+const { recordApiKeyAuthFailed, recordApiKeyUsed } = require('../audit/audit-recorder');
 const { PublicError } = require('../errors/public-error');
 
 function extractApiKey(req) {
@@ -34,17 +33,7 @@ async function requireApiKey(req, res, next) {
   try {
     const result = await verifyApiKey(rawKey);
     if (!result.ok) {
-      const parsed = parseApiKey(rawKey);
-      await writeAuditLog({
-        action: 'api_key_auth_failed',
-        resourceType: 'api_key',
-        ip: req.ip,
-        userAgent: req.header('user-agent'),
-        metadata: {
-          reason: result.reason,
-          keyPrefix: parsed?.keyPrefix || null,
-        },
-      });
+      await recordApiKeyAuthFailed(req, rawKey, result.reason);
       return next(
         new PublicError({
           statusCode: 401,
@@ -63,18 +52,7 @@ async function requireApiKey(req, res, next) {
       role: result.apiKey.role,
     };
 
-    await writeAuditLog({
-      actorApiKeyId: result.apiKey.id,
-      action: 'api_key_used',
-      resourceType: 'api_key',
-      resourceId: result.apiKey.id,
-      ip: req.ip,
-      userAgent: req.header('user-agent'),
-      metadata: {
-        partnerId: result.apiKey.partnerId,
-        keyPrefix: result.apiKey.keyPrefix,
-      },
-    });
+    await recordApiKeyUsed(req, result.apiKey);
 
     return next();
   } catch (err) {
