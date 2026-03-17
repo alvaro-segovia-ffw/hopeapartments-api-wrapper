@@ -4,6 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const { API_KEY_SCOPES } = require('../lib/api-key-scopes');
+const { parseCookieHeader } = require('../lib/cookies');
 const {
   DEVELOPER_INTERNAL_PERMISSION_SET,
   FULL_INTERNAL_PERMISSION_SET,
@@ -11,6 +12,7 @@ const {
   getPermissionsForRoles,
 } = require('../src/server/authz/internal-permissions');
 const { PublicError } = require('../src/server/errors/public-error');
+const { adminCookieName, extractAdminToken } = require('../src/server/middlewares/require-admin-operator');
 const { DOCS_REQUIRED_PERMISSION } = require('../middlewares/docs-access');
 const { errorHandler } = require('../src/server/middlewares/error-handler');
 const { requirePermission } = require('../src/server/middlewares/require-permission');
@@ -93,6 +95,28 @@ test('requireRole blocks non-matching roles', () => {
 
 test('docs access now requires explicit internal permission', () => {
   assert.equal(DOCS_REQUIRED_PERMISSION, INTERNAL_PERMISSIONS.DOCS_READ_INTERNAL);
+});
+
+test('extractAdminToken ignores cookie sessions when bearer auth is required', () => {
+  const req = {
+    header(name) {
+      if (String(name).toLowerCase() === 'authorization') return '';
+      return '';
+    },
+    headers: {
+      cookie: `${adminCookieName}=session-token`,
+    },
+  };
+
+  assert.equal(extractAdminToken(req), 'session-token');
+  assert.equal(extractAdminToken(req, { allowCookie: false }), null);
+});
+
+test('parseCookieHeader ignores malformed cookie encoding', () => {
+  assert.doesNotThrow(() => parseCookieHeader('good=value; broken=%E0%A4%A'));
+  assert.deepEqual(parseCookieHeader('good=value; broken=%E0%A4%A'), {
+    good: 'value',
+  });
 });
 
 test('admin role resolves the full internal permission set', () => {

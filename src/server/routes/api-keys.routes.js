@@ -16,7 +16,7 @@ const {
 const { writeAuditLog } = require('../../../lib/audit-service');
 const { INTERNAL_PERMISSIONS } = require('../authz/internal-permissions');
 const { PublicError } = require('../errors/public-error');
-const { requireAdminOperator } = require('../middlewares/require-admin-operator');
+const { requireAdminBearerOperator, requireAdminOperator } = require('../middlewares/require-admin-operator');
 const { requireConfiguredAuth } = require('../middlewares/require-configured-auth');
 const { requirePermission } = require('../middlewares/require-permission');
 const {
@@ -37,7 +37,7 @@ function buildApiKeysRouter({ asyncHandler }) {
   router.get(
     '/',
     requireConfiguredAuth,
-    requireAdminOperator,
+    requireAdminBearerOperator,
     requirePermission(INTERNAL_PERMISSIONS.API_KEYS_READ),
     asyncHandler(async (_req, res) => {
       if (!isApiKeyServiceConfigured()) {
@@ -143,7 +143,7 @@ function buildApiKeysRouter({ asyncHandler }) {
   router.post(
     '/:id/revoke',
     requireConfiguredAuth,
-    requireAdminOperator,
+    requireAdminBearerOperator,
     requirePermission(INTERNAL_PERMISSIONS.API_KEYS_REVOKE),
     asyncHandler(async (req, res) => {
       if (!isApiKeyServiceConfigured()) {
@@ -185,7 +185,7 @@ function buildApiKeysRouter({ asyncHandler }) {
   router.post(
     '/:id/reactivate',
     requireConfiguredAuth,
-    requireAdminOperator,
+    requireAdminBearerOperator,
     requirePermission(INTERNAL_PERMISSIONS.API_KEYS_UPDATE),
     asyncHandler(async (req, res) => {
       if (!isApiKeyServiceConfigured()) {
@@ -227,7 +227,7 @@ function buildApiKeysRouter({ asyncHandler }) {
   router.post(
     '/:id/rotate',
     requireConfiguredAuth,
-    requireAdminOperator,
+    requireAdminBearerOperator,
     requirePermission(INTERNAL_PERMISSIONS.API_KEYS_ROTATE),
     asyncHandler(async (req, res) => {
       if (!isApiKeyServiceConfigured()) {
@@ -273,7 +273,7 @@ function buildApiKeysRouter({ asyncHandler }) {
   router.patch(
     '/:id',
     requireConfiguredAuth,
-    requireAdminOperator,
+    requireAdminBearerOperator,
     requirePermission(INTERNAL_PERMISSIONS.API_KEYS_UPDATE),
     asyncHandler(async (req, res) => {
       if (!isApiKeyServiceConfigured()) {

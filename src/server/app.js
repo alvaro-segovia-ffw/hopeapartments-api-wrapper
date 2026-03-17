@@ -95,6 +95,7 @@ const loginRateLimitMiddleware = createInMemoryRateLimit({
 });
 
 const app = express();
+app.disable('x-powered-by');
 const adminDir = path.join(projectRoot, 'src', 'public', 'admin', 'web');
 const siteDir = path.join(projectRoot, 'src', 'public', 'site', 'web');
 const docsDir = path.join(projectRoot, 'docs');
@@ -115,18 +116,8 @@ function buildHealthPayload() {
   };
 }
 
-function requestOrigin(req) {
-  const forwardedProto = String(req.header('x-forwarded-proto') || '')
-    .split(',')[0]
-    .trim();
-  const proto = forwardedProto || req.protocol || (IS_PRODUCTION ? 'https' : 'http');
-  const host = String(req.header('x-forwarded-host') || req.header('host') || '').trim();
-  if (!host) return null;
-  return `${proto}://${host}`;
-}
-
 function buildOpenApiPayload(spec, req, explicitUrl) {
-  const serverUrl = String(explicitUrl || '').trim() || requestOrigin(req);
+  const serverUrl = String(explicitUrl || '').trim();
   if (!serverUrl) return spec;
 
   return {
@@ -167,7 +158,13 @@ function clearAdminSessionCookie(res) {
   );
 }
 
-app.use(express.json());
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'no-referrer');
+  return next();
+});
+app.use(express.json({ limit: '100kb' }));
 app.use('/site', express.static(siteDir));
 
 app.get('/', (_req, res) => {

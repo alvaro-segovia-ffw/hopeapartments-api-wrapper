@@ -14,13 +14,15 @@ function userHasAdminConsoleAccess(user) {
   return roles.some((role) => allowedRoles.has(role));
 }
 
-function extractAdminToken(req) {
+function extractAdminToken(req, options = {}) {
+  const { allowCookie = true } = options;
   const bearer = extractBearerToken(req);
   if (bearer) return bearer;
+  if (!allowCookie) return null;
   return getCookie(req, adminCookieName);
 }
 
-async function authenticateAdminOperator(req) {
+async function authenticateAdminOperator(req, options = {}) {
   if (!isAuthConfigured()) {
     throw new PublicError({
       statusCode: 503,
@@ -29,12 +31,12 @@ async function authenticateAdminOperator(req) {
     });
   }
 
-  const token = extractAdminToken(req);
+  const token = extractAdminToken(req, options);
   if (!token) {
     throw new PublicError({
       statusCode: 401,
       code: 'UNAUTHORIZED',
-      message: 'Missing admin session or Bearer token.',
+      message: options.allowCookie === false ? 'Missing Bearer token.' : 'Missing admin session or Bearer token.',
     });
   }
 
@@ -80,6 +82,17 @@ async function requireAdminOperator(req, _res, next) {
   }
 }
 
+async function requireAdminBearerOperator(req, _res, next) {
+  try {
+    const auth = await authenticateAdminOperator(req, { allowCookie: false });
+    req.adminAuth = auth;
+    req.auth = auth.claims;
+    return next();
+  } catch (err) {
+    return next(err);
+  }
+}
+
 async function requireAdminPageSession(req, res, next) {
   try {
     const auth = await authenticateAdminOperator(req);
@@ -93,6 +106,8 @@ async function requireAdminPageSession(req, res, next) {
 module.exports = {
   adminCookieName,
   authenticateAdminOperator,
+  extractAdminToken,
+  requireAdminBearerOperator,
   requireAdminOperator,
   requireAdminPageSession,
   userHasAdminConsoleAccess,
