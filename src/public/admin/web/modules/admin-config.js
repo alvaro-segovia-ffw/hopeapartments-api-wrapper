@@ -1,4 +1,6 @@
 export const loginPath = '/admin/login';
+export const dashboardPath = '/admin/dashboard';
+export const allowedAdminRoles = new Set(['admin', 'developer']);
 
 export const VIEW_CONTENT = Object.freeze({
   overview: {
