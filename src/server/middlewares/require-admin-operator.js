@@ -1,13 +1,14 @@
 'use strict';
 
 const { getUserProfile, isAuthConfigured } = require('../../../lib/auth-service');
-const { getCookie } = require('../../../lib/cookies');
+const { getCookie, serializeCookie } = require('../../../lib/cookies');
 const { verifyAccessToken } = require('../../../lib/jwt');
 const { PublicError } = require('../errors/public-error');
 const { extractBearerToken } = require('./require-auth');
 
 const allowedRoles = new Set(['admin', 'developer']);
 const adminCookieName = 'hope_admin_session';
+const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 
 function userHasAdminConsoleAccess(user) {
   const roles = Array.isArray(user?.roles) ? user.roles : [];
@@ -20,6 +21,20 @@ function extractAdminToken(req, options = {}) {
   if (bearer) return bearer;
   if (!allowCookie) return null;
   return getCookie(req, adminCookieName);
+}
+
+function clearAdminSessionCookie(res) {
+  res.setHeader(
+    'Set-Cookie',
+    serializeCookie(adminCookieName, '', {
+      httpOnly: true,
+      sameSite: 'Lax',
+      secure: IS_PRODUCTION,
+      path: '/',
+      maxAge: 0,
+      expires: new Date(0),
+    })
+  );
 }
 
 async function authenticateAdminOperator(req, options = {}) {
@@ -84,6 +99,9 @@ async function requireAdminOperator(req, _res, next) {
     req.auth = auth.claims;
     return next();
   } catch (err) {
+    if (!extractBearerToken(req) && getCookie(req, adminCookieName) && err instanceof PublicError && err.statusCode === 401) {
+      clearAdminSessionCookie(_res);
+    }
     return next(err);
   }
 }
@@ -105,6 +123,9 @@ async function requireAdminPageSession(req, res, next) {
     req.adminAuth = auth;
     return next();
   } catch (_err) {
+    if (!extractBearerToken(req) && getCookie(req, adminCookieName)) {
+      clearAdminSessionCookie(res);
+    }
     return res.redirect('/admin/login');
   }
 }
@@ -112,6 +133,7 @@ async function requireAdminPageSession(req, res, next) {
 module.exports = {
   adminCookieName,
   authenticateAdminOperator,
+  clearAdminSessionCookie,
   extractAdminToken,
   requireAdminOperator,
   requireAdminPageSession,

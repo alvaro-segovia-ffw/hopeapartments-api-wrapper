@@ -12,7 +12,12 @@ const {
   getPermissionsForRoles,
 } = require('../src/server/authz/internal-permissions');
 const { PublicError } = require('../src/server/errors/public-error');
-const { adminCookieName, extractAdminToken } = require('../src/server/middlewares/require-admin-operator');
+const {
+  adminCookieName,
+  clearAdminSessionCookie,
+  extractAdminToken,
+  requireAdminOperator,
+} = require('../src/server/middlewares/require-admin-operator');
 const { DOCS_REQUIRED_PERMISSION } = require('../middlewares/docs-access');
 const {
   requireConfiguredApiKeyService,
@@ -69,6 +74,12 @@ function runErrorHandler(err, req, res) {
   } finally {
     console.error = originalConsoleError;
   }
+}
+
+async function runMiddleware(middleware, req, res) {
+  return new Promise((resolve) => {
+    middleware(req, res, (err) => resolve(err));
+  });
 }
 
 test('requireRole allows matching roles', () => {
@@ -178,6 +189,14 @@ test('extractAdminToken ignores cookie sessions when bearer auth is required', (
 
   assert.equal(extractAdminToken(req), 'session-token');
   assert.equal(extractAdminToken(req, { allowCookie: false }), null);
+});
+
+test('clearAdminSessionCookie expires the admin session cookie', () => {
+  const res = createResponseDouble();
+  clearAdminSessionCookie(res);
+
+  assert.match(String(res.headers['set-cookie'] || ''), /hope_admin_session=/);
+  assert.match(String(res.headers['set-cookie'] || ''), /Max-Age=0/);
 });
 
 test('parseCookieHeader ignores malformed cookie encoding', () => {
@@ -522,6 +541,35 @@ test('requireApiKeyScope rejects a valid key without the required scope and reco
   assert.equal(auditEntries[0].metadata.enforced, true);
 });
 
+test('requireAdminOperator clears invalid admin session cookie for stale cookie auth', async () => {
+  const previousJwtSecret = process.env.JWT_ACCESS_SECRET;
+  const previousDatabaseUrl = process.env.DATABASE_URL;
+  process.env.JWT_ACCESS_SECRET = 'test-secret';
+  process.env.DATABASE_URL = 'postgres://configured.example/test';
+
+  const req = {
+    headers: {
+      cookie: `${adminCookieName}=stale-token`,
+    },
+    header(name) {
+      const normalized = String(name).toLowerCase();
+      if (normalized === 'authorization') return '';
+      return '';
+    },
+  };
+  const res = createResponseDouble();
+  const forwardedError = await runMiddleware(requireAdminOperator, req, res);
+
+  assert.equal(forwardedError instanceof PublicError, true);
+  assert.equal(forwardedError.statusCode, 401);
+  assert.match(String(res.headers['set-cookie'] || ''), /Max-Age=0/);
+
+  if (previousJwtSecret === undefined) delete process.env.JWT_ACCESS_SECRET;
+  else process.env.JWT_ACCESS_SECRET = previousJwtSecret;
+  if (previousDatabaseUrl === undefined) delete process.env.DATABASE_URL;
+  else process.env.DATABASE_URL = previousDatabaseUrl;
+});
+
 test('errorHandler serializes PublicError with safe public fields', () => {
   const req = createRequestDouble({ method: 'POST', originalUrl: '/api-keys' });
   const res = createResponseDouble();
@@ -539,6 +587,34 @@ test('errorHandler serializes PublicError with safe public fields', () => {
     code: 'INVALID_SCOPES',
     message: 'Invalid API key scopes.',
   });
+});
+
+test('errorHandler does not log expected public 4xx errors', () => {
+  const req = createRequestDouble({ method: 'GET', originalUrl: '/admin/session' });
+  const res = createResponseDouble();
+  let consoleCalls = 0;
+  const originalConsoleError = console.error;
+  console.error = () => {
+    consoleCalls += 1;
+  };
+
+  try {
+    errorHandler(
+      new PublicError({
+        statusCode: 401,
+        code: 'UNAUTHORIZED',
+        message: 'Invalid access token.',
+      }),
+      req,
+      res,
+      () => {}
+    );
+  } finally {
+    console.error = originalConsoleError;
+  }
+
+  assert.equal(consoleCalls, 0);
+  assert.equal(res.statusCode, 401);
 });
 
 test('errorHandler hides internal details for generic errors', () => {
