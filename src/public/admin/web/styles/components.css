@@ -127,6 +127,21 @@
   font-size: 1rem;
 }
 
+.scope-select-card {
+  padding: 1rem;
+  border-radius: 1.1rem;
+  border: 1px solid rgba(183, 86, 43, 0.2);
+  background:
+    linear-gradient(180deg, rgba(183, 86, 43, 0.08), rgba(255, 255, 255, 0.74)),
+    rgba(255, 255, 255, 0.72);
+}
+
+.scope-select {
+  min-height: 3.45rem;
+  font-weight: 600;
+  background-color: rgba(255, 252, 248, 0.95);
+}
+
 .create-form-note {
   max-width: 24rem;
 }

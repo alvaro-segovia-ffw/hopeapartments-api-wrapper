@@ -214,12 +214,15 @@
                       <p class="card-kicker mb-3">Access</p>
                       <div class="row g-3">
                         <div class="col-12 create-scope-row">
-                          <label class="form-label">
-                            Scope
-                            <select id="createScope" name="scopes" class="form-select">
-                              <option value="apartments:read">apartments:read</option>
-                            </select>
-                          </label>
+                          <div class="scope-select-card">
+                            <label class="form-label mb-2">
+                              Scope
+                              <select id="createScope" name="scopes" class="form-select scope-select">
+                                <option value="apartments:read">apartments:read</option>
+                              </select>
+                            </label>
+                            <p class="helper-copy mb-0">Current partner access starts with apartment read access.</p>
+                          </div>
                         </div>
                         <div class="col-12">
                           <label class="form-label">
